@@ -152,6 +152,12 @@ def main(args):
             fc_hidden_size=config["fc_hidden_size"],
             pretrained=config["pretrained"],
         ).to(device)
+
+        # FIXME: Jn 
+        if config["model_path"] != "" and config["pretrained"] is True:
+            state_dict = torch.load(config["model_path"], map_location="cpu")
+            new_state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+            model.load_state_dict(new_state_dict)
     elif method == "classification":
         model = ClassificationNet(
             backbone=config["backbone"],
