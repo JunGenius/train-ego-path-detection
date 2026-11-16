@@ -1,5 +1,6 @@
 # backbone configuration
 pretrained: True  # whether to use pretrained weights for the backbone
+model_path: "/home/chzl/WorkSpace/Jn/Train/train-ego-path-detection/weights/chromatic-laughter-5/best.pt"
 input_shape: [3, 512, 512]  # input size of the model (channels, height, width)
 
 # training configuration
@@ -24,5 +25,5 @@ std_dev_factor_sides: 0.3  # standard deviation factor for the left-right crop a
 std_dev_factor_top: 0.1  # standard deviation factor for the top crop augmentation
 
 # paths configuration
-images_path: "/home/tlaurent/Datasets/rs19_val/jpgs/rs19_val"  # path to the images directory
-annotations_path: "/home/tlaurent/Datasets/rs19_egopath/rs19_egopath.json"  # path to the annotations file
+images_path: "/data/JDatasets/RS19/Railway/"  # path to the images directory
+annotations_path: "/data/JDatasets/RS19/final_merged_all_1113.json"  # path to the annotations file

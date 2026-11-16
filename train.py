@@ -7,7 +7,7 @@ os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
 import torch
-import wandb
+# import wandb
 import yaml
 
 from src.nn.loss import (
@@ -20,8 +20,17 @@ from src.utils.common import set_seeds, set_worker_seeds, simple_logger, split_d
 from src.utils.dataset import PathsDataset
 from src.utils.evaluate import IoUEvaluator
 from src.utils.trainer import train
+# FXIME: Jn
+from torch.utils.data.distributed import DistributedSampler
+
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+
 
 torch.use_deterministic_algorithms(True)
+
+
+TRAIN_NAME = "chromatic-laughter-5-1116"
 
 
 def parse_arguments():
@@ -97,14 +106,28 @@ def main(args):
         if len(val_indices) > 0
         else None
     )
+
+    # FIXME: Jn
+
+    # 初始化（通常通过环境变量，torchrun 会自动处理）
+    dist.init_process_group(backend="nccl")
+    local_rank = int(os.environ["LOCAL_RANK"])
+    torch.cuda.set_device(local_rank)
+    device = torch.device(f"cuda:{local_rank}")
+
+    # 训练集和验证集都需要加上 DistributedSampler
+    train_sampler = DistributedSampler(train_dataset)
+    val_sampler = DistributedSampler(val_dataset, shuffle=False)
+
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=config["batch_size"],
-        shuffle=True,
+        # shuffle=True,
         num_workers=config["workers"],
         pin_memory=True,
         worker_init_fn=set_worker_seeds,
         generator=torch.Generator().manual_seed(config["seed"]),
+        sampler=train_sampler
     )
     val_loader = (
         torch.utils.data.DataLoader(
@@ -114,6 +137,7 @@ def main(args):
             pin_memory=True,
             worker_init_fn=set_worker_seeds,
             generator=torch.Generator().manual_seed(config["seed"]),
+            sampler=val_sampler
         )
         if val_dataset is not None
         else None
@@ -151,12 +175,13 @@ def main(args):
     except Exception as e:
         print(f"torch.compile failed: {e}. Running model without compilation.")
 
-    wandb.init(
-        project="train-ego-path-detection",
-        config=config,
-        dir=os.path.join(base_path),
-    )
-    save_path = os.path.join(base_path, "weights", wandb.run.name)
+    # FIXME: Jn
+    # wandb.init(
+    #     project="train-ego-path-detection",
+    #     config=config,
+    #     dir=os.path.join(base_path),
+    # )
+    save_path = os.path.join(base_path, "weights", TRAIN_NAME)
     os.makedirs(save_path, exist_ok=True)
     with open(os.path.join(save_path, "config.yaml"), "w") as f:
         yaml.dump(config, f)
@@ -191,6 +216,10 @@ def main(args):
         else None
     )
 
+
+
+    model = DDP(model, device_ids=[local_rank])
+
     logger.info(f"\nTraining {method} model for {config['epochs']} epochs...")
     train(
         epochs=config["epochs"],
@@ -222,10 +251,10 @@ def main(args):
         )
         test_iou = iou_evaluator.evaluate()
         logger.info(f"Test IoU: {test_iou:.5f}")
-        wandb.log({"test_iou": test_iou})
+        # wandb.log({"test_iou": test_iou})
 
 
 if __name__ == "__main__":
-    wandb.login()
+    # wandb.login()
     args = parse_arguments()
     main(args)
