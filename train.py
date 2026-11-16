@@ -210,7 +210,7 @@ def main(args):
             max_lr=config["learning_rate"],
             total_steps=config["epochs"],
             pct_start=0.1,
-            verbose=False,
+            # verbose=False,
         )
         if config["scheduler"] == "one_cycle"
         else None
