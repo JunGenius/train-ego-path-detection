@@ -111,7 +111,7 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 
-import wandb
+# import wandb
 
 
 def train_epoch(model, criterion, device, dataloader, optimizer):
@@ -215,7 +215,7 @@ def train(
                 + f" | TRAIN LOSS: {train_loss:.5f}"
                 + f" | VAL LOSS: {val_loss:.5f}"
             )
-            wandb.log({"train_loss": train_loss, "val_loss": val_loss})
+            # wandb.log({"train_loss": train_loss, "val_loss": val_loss})
             
-    if is_main_process:
-        wandb.log({"best_val_loss": best_val_loss})
+    # if is_main_process:
+    #     wandb.log({"best_val_loss": best_val_loss})
