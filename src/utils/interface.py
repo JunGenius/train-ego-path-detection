@@ -97,11 +97,21 @@ class Detector:
                 decoder_channels=tuple(self.config["decoder_channels"]),
             )
         model.to(self.device).eval()
-        model.load_state_dict(
-            torch.load(
-                os.path.join(self.model_path, "best.pt"), map_location=self.device
-            )
-        )
+        # model.load_state_dict(
+        #     torch.load(
+        #         os.path.join(self.model_path, "best.pt"), map_location=self.device
+        #     )
+        # )
+        state_dict = torch.load(os.path.join(self.model_path, "best.pt"), map_location=self.device)
+
+        # 如果是完整模型（如保存的是 Checkpoint 而不是仅 state_dict）
+        if 'state_dict' in state_dict:
+            state_dict = state_dict['state_dict']
+
+        # 去掉 _orig_mod 前缀
+        new_state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+
+        model.load_state_dict(new_state_dict)
         return model
 
     def init_model_tensorrt(self):
