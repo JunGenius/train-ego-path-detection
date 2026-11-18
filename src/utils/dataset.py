@@ -73,7 +73,7 @@ class PathsDataset(Dataset):
         annotation = self.annotations[img_name]
         rails_mask = self.generate_rails_mask(img.size, annotation)
         img, rails_mask = self.random_crop(img, rails_mask)
-        img, rails_mask = self.random_flip_lr(img, rails_mask)
+        # img, rails_mask = self.random_flip_lr(img, rails_mask)
         if self.to_tensor:
             img = self.to_tensor(img)
         if self.img_aug:
@@ -83,11 +83,14 @@ class PathsDataset(Dataset):
             if self.to_tensor:
                 path_gt = torch.from_numpy(path_gt)
                 ylim_gt = torch.tensor(ylim_gt)
+            # FIXME: Jn
+            self._save_debug_vis(img, path_gt, ylim_gt, img_name, rails_mask)
             return img, path_gt, ylim_gt
         elif self.method == "classification":
             path_gt = self.generate_target_classification(rails_mask)
             if self.to_tensor:
                 path_gt = torch.from_numpy(path_gt)
+
             return img, path_gt
         elif self.method == "segmentation":
             segmentation = self.generate_target_segmentation(rails_mask)
@@ -98,7 +101,7 @@ class PathsDataset(Dataset):
                 segmentation = to_scaled_tensor(segmentation)
             return img, segmentation
     # FIXME: Jn
-    def _save_debug_vis(self, img, path_gt, ylim_gt, img_name, save_dir="debug_vis"):
+    def _save_debug_vis(self, img, path_gt, ylim_gt, img_name, rails_mask, save_dir="debug_vis"):
         os.makedirs(save_dir, exist_ok=True)
         
         # 1. 将 img 还原为 uint8 的 numpy 数组 (H, W, C)
@@ -150,47 +153,26 @@ class PathsDataset(Dataset):
         # 4. 保存图片
         base_name = os.path.splitext(img_name)[0]
         cv2.imwrite(os.path.join(save_dir, f"{base_name}_vis.jpg"), vis_img)
-
-    # def generate_rails_mask(self, shape, annotation):
-    #     rails_mask = Image.new("L", shape, 0)
-    #     draw = ImageDraw.Draw(rails_mask)
-    #     rails = [np.array(annotation["left_rail"]), np.array(annotation["right_rail"])]
-    #     for rail in rails:
-    #         draw.line([tuple(xy) for xy in rail], fill=1, width=1)
-    #     rails_mask = np.array(rails_mask)
-    #     rails_mask[: max(rails[0][:, 1].min(), rails[1][:, 1].min()), :] = 0
-    #     for row_idx in np.where(np.sum(rails_mask, axis=1) > 2)[0]:
-    #         rails_mask[row_idx, np.nonzero(rails_mask[row_idx, :])[0][1:-1]] = 0
-    #     return rails_mask
+        cv2.imwrite(os.path.join(save_dir, f"{base_name}_mask.jpg"), (rails_mask * 255).astype(np.uint8))
 
     def generate_rails_mask(self, shape, annotation):
         rails_mask = Image.new("L", shape, 0)
         draw = ImageDraw.Draw(rails_mask)
-        
-        # 即使轨道贴边，也正常画线
         rails = [np.array(annotation["left_rail"]), np.array(annotation["right_rail"])]
+        if len(rails[0]) < 5 or len(rails[1]) < 5:
+            return rails_mask
+
         for rail in rails:
-            if len(rail) > 1:
-                draw.line([tuple(xy) for xy in rail], fill=1, width=1)
-                
+            draw.line([tuple(xy) for xy in rail], fill=1, width=1)
         rails_mask = np.array(rails_mask)
-        
-        # 1. 裁剪起点上方多余部分
-        valid_y_min = min(rails[0][:, 1].min(), rails[1][:, 1].min()) if len(rails[0]) > 0 and len(rails[1]) > 0 else 0
-        rails_mask[: max(valid_y_min, 0), :] = 0
-        
-        # 2. 安全地处理每一行的多余像素（即使贴边也不崩塌）
+        rails_mask[: max(rails[0][:, 1].min(), rails[1][:, 1].min()), :] = 0
+
+        if len(rails[0]) > 0 and len(rails[1]) > 0:
+            valid_y_max = min(rails[0][:, 1].max(), rails[1][:, 1].max())
+            rails_mask[max(int(valid_y_max), 0):, :] = 0
+
         for row_idx in np.where(np.sum(rails_mask, axis=1) > 2)[0]:
-            nonzero_indices = np.nonzero(rails_mask[row_idx, :])[0]
-            if len(nonzero_indices) > 2:
-                # 保留最左边一个，最右边一个，中间的清零
-                # 这样即使贴边（nonzero_indices[0] == 0），也能安全保留
-                left_most = nonzero_indices[0]
-                right_most = nonzero_indices[-1]
-                rails_mask[row_idx, :] = 0
-                rails_mask[row_idx, left_most] = 1
-                rails_mask[row_idx, right_most] = 1
-                
+            rails_mask[row_idx, np.nonzero(rails_mask[row_idx, :])[0][1:-1]] = 0
         return rails_mask
 
     def random_crop(self, img, rails_mask):
@@ -345,7 +327,7 @@ class PathsDataset(Dataset):
         # 从底层往上扫描进行兜底，确保底部不留空隙
         for r_idx in range(rails_mask.shape[0] - 1, -1, -1):
             pts = np.nonzero(rails_mask[r_idx, :])[0]
-            if len(pts) >= 2:
+            if len(pts) >= 1:
                 last_valid_left = pts[0] / (rails_mask.shape[1] - 1)
                 last_valid_right = pts[-1] / (rails_mask.shape[1] - 1)
                 break
@@ -360,8 +342,10 @@ class PathsDataset(Dataset):
                 last_valid_left = rails_points_normalized[0]
                 last_valid_right = rails_points_normalized[1]
             else:
-                traj_target[0, i] = last_valid_left
-                traj_target[1, i] = last_valid_right
+                # 侧面轨道取最大值中最小值为水平线卡齐
+                traj_target[0, i] = -1
+                traj_target[1, i] = -1
+            
                 
         return traj_target, ylim_target
 
