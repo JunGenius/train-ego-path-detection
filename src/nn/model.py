@@ -102,7 +102,8 @@ class RegressionNet(nn.Module):
                 fc_hidden_size,
             ),
             nn.ReLU(inplace=True),
-            nn.Linear(fc_hidden_size, anchors * 2 + 1),
+            # FIXME: Jn 修改 适配 ylim [start,stop] 二维输出
+            nn.Linear(fc_hidden_size, anchors * 2 + 2),
         )
 
     def forward(self, x):

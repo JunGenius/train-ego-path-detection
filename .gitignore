@@ -7,3 +7,6 @@ wandb/
 .vscode/
 data/
 out/
+debug_vis/
+configs/
+*.yaml
