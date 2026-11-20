@@ -23,7 +23,7 @@ def classifications_to_rails(clf, classes):
     return np.array(rails)
 
 
-def regression_to_rails(traj, ylim):
+def regression_to_rails_v1(traj, ylim):
     """Processes the regression model's output to an array of left and right rail point relative coordinates (x, y).
 
     Args:
@@ -43,49 +43,49 @@ def regression_to_rails(traj, ylim):
     return np.array(rails)
 
 # FIXME: Jn 修改 适配 ylim [start,stop] 二维输出
-# def regression_to_rails(traj, ylim):
-#     """Processes the regression model's output to an array of left and right rail point relative coordinates (x, y).
+def regression_to_rails_v2(traj, ylim):
+    """Processes the regression model's output to an array of left and right rail point relative coordinates (x, y).
 
-#     Args:
-#         traj (numpy.ndarray): Regressed x-coordinates for each rail at each anchor. Shape of (2, H).
-#         ylim (float | array-like): (y_start, y_end) in [0, 1] (0=top, 1=bottom), or a single float limit.
+    Args:
+        traj (numpy.ndarray): Regressed x-coordinates for each rail at each anchor. Shape of (2, H).
+        ylim (float | array-like): (y_start, y_end) in [0, 1] (0=top, 1=bottom), or a single float limit.
 
-#     Returns:
-#         numpy.ndarray: Ego-path as an array of left and right rail points. Shape of (2, N, 2) with N <= H.
-#     """
-#     H = traj.shape[1]
-#     ylim_arr = np.asarray(ylim, dtype=np.float32)
+    Returns:
+        numpy.ndarray: Ego-path as an array of left and right rail points. Shape of (2, N, 2) with N <= H.
+    """
+    H = traj.shape[1]
+    ylim_arr = np.asarray(ylim, dtype=np.float32)
 
-#     # 锚点索引 i=0 对应底部 (y=1.0)，i=H-1 对应顶部 (y=0.0)
-#     # yrails 是从 1.0 到 0.0 的数组，长度 H
-#     if ylim_arr.ndim == 0:
-#         # 兼容单值情况：视为从底部到某个上限比例
-#         y_start, y_end = 0.0, float(np.clip(ylim_arr.item(), 0.0, 1.0))
-#         start_idx = 0
-#         end_idx = int(np.clip(round(y_end * H), 0, H))
-#     else:
-#         # [y_start, y_end] 为从顶部向下的比例（0=顶，1=底）
-#         y_start = float(np.clip(ylim_arr[0], 0.0, 1.0))
-#         y_end = float(np.clip(ylim_arr[1], y_start, 1.0))
-#         # 映射到 i=0(底, 1.0) -> i=H-1(顶, 0.0) 的索引区间
-#         idx_from_top_1 = int(np.clip(round((1.0 - y_end) * (H - 1)), 0, H - 1))
-#         idx_from_top_2 = int(np.clip(round((1.0 - y_start) * (H - 1)), 0, H - 1))
-#         start_idx = min(idx_from_top_1, idx_from_top_2)
-#         end_idx = min(max(idx_from_top_1, idx_from_top_2) + 1, H)
+    # 锚点索引 i=0 对应底部 (y=1.0)，i=H-1 对应顶部 (y=0.0)
+    # yrails 是从 1.0 到 0.0 的数组，长度 H
+    if ylim_arr.ndim == 0:
+        # 兼容单值情况：视为从底部到某个上限比例
+        y_start, y_end = 0.0, float(np.clip(ylim_arr.item(), 0.0, 1.0))
+        start_idx = 0
+        end_idx = int(np.clip(round(y_end * H), 0, H))
+    else:
+        # [y_start, y_end] 为从顶部向下的比例（0=顶，1=底）
+        y_start = float(np.clip(ylim_arr[0], 0.0, 1.0))
+        y_end = float(np.clip(ylim_arr[1], y_start, 1.0))
+        # 映射到 i=0(底, 1.0) -> i=H-1(顶, 0.0) 的索引区间
+        idx_from_top_1 = int(np.clip(round((1.0 - y_end) * (H - 1)), 0, H - 1))
+        idx_from_top_2 = int(np.clip(round((1.0 - y_start) * (H - 1)), 0, H - 1))
+        start_idx = min(idx_from_top_1, idx_from_top_2)
+        end_idx = min(max(idx_from_top_1, idx_from_top_2) + 1, H)
 
-#     switched_idx = np.where(traj[0, :] >= traj[1, :])[0]  # if left rail >= right rail
-#     switched_idx = int(switched_idx[0]) if switched_idx.size > 0 else H
+    switched_idx = np.where(traj[0, :] >= traj[1, :])[0]  # if left rail >= right rail
+    switched_idx = int(switched_idx[0]) if switched_idx.size > 0 else H
 
-#     start_idx = min(start_idx, switched_idx)
-#     end_idx = min(end_idx, switched_idx)
+    start_idx = min(start_idx, switched_idx)
+    end_idx = min(end_idx, switched_idx)
 
-#     if end_idx <= start_idx:
-#         return np.zeros((2, 0, 2), dtype=np.float32)
+    if end_idx <= start_idx:
+        return np.zeros((2, 0, 2), dtype=np.float32)
 
-#     xrails = np.clip(traj[:, start_idx:end_idx], 0.0, 1.0)
-#     yrails = np.linspace(1.0, 0.0, H)[start_idx:end_idx]
-#     rails = [np.column_stack((xrails[i, :], yrails)) for i in range(xrails.shape[0])]
-#     return np.array(rails, dtype=np.float32)
+    xrails = np.clip(traj[:, start_idx:end_idx], 0.0, 1.0)
+    yrails = np.linspace(1.0, 0.0, H)[start_idx:end_idx]
+    rails = [np.column_stack((xrails[i, :], yrails)) for i in range(xrails.shape[0])]
+    return np.array(rails, dtype=np.float32)
 
 
 def scale_rails(rails, crop_coords, img_shape):

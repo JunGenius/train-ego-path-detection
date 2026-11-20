@@ -4,6 +4,7 @@ import torch.nn as nn
 
 from .backbone import EfficientNetBackbone, ResNetBackbone
 from .decoder import UNetDecoder
+from configs.constants import FIXME_VERSION
 
 
 class ClassificationNet(nn.Module):
@@ -94,6 +95,13 @@ class RegressionNet(nn.Module):
             out_channels=pool_channels,
             kernel_size=1,
         )  # stride=1, padding=0
+
+        # FIXME: Jn 修改 适配 ylim [start,stop] 二维输出
+        if FIXME_VERSION:
+            Count = 2
+        else:
+            Count = 1
+
         self.fc = nn.Sequential(
             nn.Linear(
                 pool_channels
@@ -102,9 +110,7 @@ class RegressionNet(nn.Module):
                 fc_hidden_size,
             ),
             nn.ReLU(inplace=True),
-            # FIXME: Jn 修改 适配 ylim [start,stop] 二维输出
-            # nn.Linear(fc_hidden_size, anchors * 2 + 2),
-            nn.Linear(fc_hidden_size, anchors * 2 + 1),
+            nn.Linear(fc_hidden_size, anchors * 2 + Count),
         )
 
     def forward(self, x):
