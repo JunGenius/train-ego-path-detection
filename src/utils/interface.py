@@ -198,8 +198,16 @@ class Detector:
             rails = np.round(rails).astype(int)
             res = rails.tolist()
         elif self.config["method"] == "regression":
-            traj = pred[:, :-1].reshape(2, self.config["anchors"])
-            ylim = 1 / (1 + np.exp(-pred[:, -1].item()))  # sigmoid
+            # traj = pred[:, :-1].reshape(2, self.config["anchors"])
+            # ylim = 1 / (1 + np.exp(-pred[:, -1].item()))  # sigmoid
+            # rails = regression_to_rails(traj, ylim)
+            # rails = scale_rails(rails, crop_coords, original_shape)
+            # rails = np.round(rails).astype(int)
+            # res = rails.tolist()
+            anchors = self.config["anchors"]
+            traj = pred[:, :-2].reshape(2, anchors)
+            ylim_logits = pred[:, -2:].reshape(-1)
+            ylim = 1.0 / (1.0 + np.exp(-ylim_logits))  # shape: (2,) -> [y_start, y_end]
             rails = regression_to_rails(traj, ylim)
             rails = scale_rails(rails, crop_coords, original_shape)
             rails = np.round(rails).astype(int)

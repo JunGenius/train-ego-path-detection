@@ -84,7 +84,7 @@ class PathsDataset(Dataset):
                 path_gt = torch.from_numpy(path_gt)
                 ylim_gt = torch.tensor(ylim_gt)
             # FIXME: Jn
-            self._save_debug_vis(img, path_gt, ylim_gt, img_name, rails_mask)
+            # self._save_debug_vis(img, path_gt, ylim_gt, img_name, rails_mask)
             return img, path_gt, ylim_gt
         elif self.method == "classification":
             path_gt = self.generate_target_classification(rails_mask)
