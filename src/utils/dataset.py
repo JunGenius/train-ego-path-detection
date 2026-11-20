@@ -384,128 +384,128 @@ class PathsDataset(Dataset):
     #         traj_target[:, i] = rails_points_normalized
     #     return traj_target, ylim_target
 
-    # def generate_target_regression(self, rails_mask):
-    #     # 1. 寻找所有有效行（即该行非零像素等于2的行，代表有左右轨道）
-    #     valid_rows = np.where(np.sum(rails_mask, axis=1) == 2)[0]
-        
-    #     if len(valid_rows) > 0:
-    #         # 轨道的最高起点（最上方的有效行索引）
-    #         top_valid_row = valid_rows[0]
-    #         # 计算从底向上的比例位置
-    #         ylim_target = float(1.0 - top_valid_row / rails_mask.shape[0])
-    #     else:
-    #         ylim_target = 1.0
-
-    #     rails_mask = self.resize_mask(
-    #         rails_mask, (self.config["anchors"], rails_mask.shape[1])
-    #     )
-        
-    #     traj_target = np.array(
-    #         [np.zeros(self.config["anchors"]), np.ones(self.config["anchors"])],
-    #         dtype=np.float32,
-    #     )
-        
-    #     last_valid_left = 0.0
-    #     last_valid_right = 1.0
-        
-    #     # 从底层往上扫描进行兜底，确保底部不留空隙
-    #     for r_idx in range(rails_mask.shape[0] - 1, -1, -1):
-    #         pts = np.nonzero(rails_mask[r_idx, :])[0]
-    #         if len(pts) >= 1:
-    #             last_valid_left = pts[0] / (rails_mask.shape[1] - 1)
-    #             last_valid_right = pts[-1] / (rails_mask.shape[1] - 1)
-    #             break
-
-    #     for i in range(self.config["anchors"]):
-    #         row = rails_mask.shape[0] - 1 - i
-    #         rails_points = np.nonzero(rails_mask[row, :])[0]
-            
-    #         if len(rails_points) >= 2:
-    #             rails_points_normalized = np.array([rails_points[0], rails_points[-1]], dtype=np.float32) / (rails_mask.shape[1] - 1)
-    #             traj_target[:, i] = rails_points_normalized
-    #             last_valid_left = rails_points_normalized[0]
-    #             last_valid_right = rails_points_normalized[1]
-    #         else:
-    #             # 侧面轨道取最大值中最小值为水平线卡齐
-    #             # traj_target[0, i] = -1
-    #             # traj_target[1, i] = -1
-    #             break
-                
-    #     return traj_target, ylim_target
-
-    # FIXME: Jn 修改 适配 ylim [start,stop] 二维输出
     def generate_target_regression(self, rails_mask):
-        anchors = self.config["anchors"]
-        H_orig, W_orig = rails_mask.shape[:2]
-        denom_h = float(max(H_orig - 1, 1))
-        denom_w = float(max(W_orig - 1, 1))
-
-        # 1. 寻找有效行，计算有效起始和终点（0.0 = 最顶部，1.0 = 最底部）
-        valid_rows = np.where(np.sum(rails_mask > 0, axis=1) >= 2)[0]
-        if len(valid_rows) == 0:
-            valid_rows = np.where(np.sum(rails_mask > 0, axis=1) >= 1)[0]
-
+        # 1. 寻找所有有效行（即该行非零像素等于2的行，代表有左右轨道）
+        valid_rows = np.where(np.sum(rails_mask, axis=1) == 2)[0]
+        
         if len(valid_rows) > 0:
-            start_row = int(valid_rows[0])   # 有效起始（最上方有效行）
-            end_row = int(valid_rows[-1])    # 有效终点（最下方有效行，不必到底）
-            y_start = float(np.clip(start_row / denom_h, 0.0, 1.0))
-            y_end = float(np.clip(end_row / denom_h, y_start, 1.0))
-            ylim_target = np.array([y_start, y_end], dtype=np.float32)
+            # 轨道的最高起点（最上方的有效行索引）
+            top_valid_row = valid_rows[0]
+            # 计算从底向上的比例位置
+            ylim_target = float(1.0 - top_valid_row / rails_mask.shape[0])
         else:
-            ylim_target = np.array([0.0, 0.0], dtype=np.float32)
+            ylim_target = 1.0
 
-        # 2. 缩放到 (anchors, W_orig) 并初始化完整 traj_target
-        resized_mask = self.resize_mask(rails_mask, (anchors, W_orig))
+        rails_mask = self.resize_mask(
+            rails_mask, (self.config["anchors"], rails_mask.shape[1])
+        )
+        
         traj_target = np.array(
-            [np.zeros(anchors), np.ones(anchors)],
+            [np.zeros(self.config["anchors"]), np.ones(self.config["anchors"])],
             dtype=np.float32,
         )
-
+        
         last_valid_left = 0.0
         last_valid_right = 1.0
-
-        # 从底层往上扫描兜底，确保底部有合理初值
-        for r_idx in range(anchors - 1, -1, -1):
-            pts = np.nonzero(resized_mask[r_idx, :])[0]
-            if len(pts) >= 2:
-                last_valid_left = float(pts[0]) / denom_w
-                last_valid_right = float(pts[-1]) / denom_w
-                break
-            elif len(pts) == 1:
-                x = float(pts[0]) / denom_w
-                last_valid_left = x
-                last_valid_right = min(1.0, x + 0.05)
+        
+        # 从底层往上扫描进行兜底，确保底部不留空隙
+        for r_idx in range(rails_mask.shape[0] - 1, -1, -1):
+            pts = np.nonzero(rails_mask[r_idx, :])[0]
+            if len(pts) >= 1:
+                last_valid_left = pts[0] / (rails_mask.shape[1] - 1)
+                last_valid_right = pts[-1] / (rails_mask.shape[1] - 1)
                 break
 
-        # 3. 逐锚点填充（i=0 最底，i=anchors-1 最顶）；遇到缺省用兜底值延续而不 break 或填 -1
-        for i in range(anchors):
-            row = anchors - 1 - i
-            rails_points = np.nonzero(resized_mask[row, :])[0]
-
+        for i in range(self.config["anchors"]):
+            row = rails_mask.shape[0] - 1 - i
+            rails_points = np.nonzero(rails_mask[row, :])[0]
+            
             if len(rails_points) >= 2:
-                left_x = float(rails_points[0]) / denom_w
-                right_x = float(rails_points[-1]) / denom_w
-                if right_x <= left_x + 1e-4:
-                    right_x = min(1.0, left_x + 1e-2)
-                last_valid_left, last_valid_right = left_x, right_x
-                traj_target[0, i] = left_x
-                traj_target[1, i] = right_x
-            elif len(rails_points) == 1:
-                x = float(rails_points[0]) / denom_w
-                width_est = max(last_valid_right - last_valid_left, 1e-2)
-                if abs(x - last_valid_left) <= abs(x - last_valid_right):
-                    left_x = x
-                    right_x = min(1.0, left_x + width_est)
-                else:
-                    right_x = x
-                    left_x = max(0.0, right_x - width_est)
-                traj_target[0, i] = left_x
-                traj_target[1, i] = right_x
+                rails_points_normalized = np.array([rails_points[0], rails_points[-1]], dtype=np.float32) / (rails_mask.shape[1] - 1)
+                traj_target[:, i] = rails_points_normalized
+                last_valid_left = rails_points_normalized[0]
+                last_valid_right = rails_points_normalized[1]
             else:
-                traj_target[0, i] = last_valid_left
-                traj_target[1, i] = max(last_valid_right, last_valid_left + 1e-2)
-
+                # 侧面轨道取最大值中最小值为水平线卡齐
+                # traj_target[0, i] = -1
+                # traj_target[1, i] = -1
+                break
+                
         return traj_target, ylim_target
+
+    # # FIXME: Jn 修改 适配 ylim [start,stop] 二维输出
+    # def generate_target_regression(self, rails_mask):
+    #     anchors = self.config["anchors"]
+    #     H_orig, W_orig = rails_mask.shape[:2]
+    #     denom_h = float(max(H_orig - 1, 1))
+    #     denom_w = float(max(W_orig - 1, 1))
+
+    #     # 1. 寻找有效行，计算有效起始和终点（0.0 = 最顶部，1.0 = 最底部）
+    #     valid_rows = np.where(np.sum(rails_mask > 0, axis=1) >= 2)[0]
+    #     if len(valid_rows) == 0:
+    #         valid_rows = np.where(np.sum(rails_mask > 0, axis=1) >= 1)[0]
+
+    #     if len(valid_rows) > 0:
+    #         start_row = int(valid_rows[0])   # 有效起始（最上方有效行）
+    #         end_row = int(valid_rows[-1])    # 有效终点（最下方有效行，不必到底）
+    #         y_start = float(np.clip(start_row / denom_h, 0.0, 1.0))
+    #         y_end = float(np.clip(end_row / denom_h, y_start, 1.0))
+    #         ylim_target = np.array([y_start, y_end], dtype=np.float32)
+    #     else:
+    #         ylim_target = np.array([0.0, 0.0], dtype=np.float32)
+
+    #     # 2. 缩放到 (anchors, W_orig) 并初始化完整 traj_target
+    #     resized_mask = self.resize_mask(rails_mask, (anchors, W_orig))
+    #     traj_target = np.array(
+    #         [np.zeros(anchors), np.ones(anchors)],
+    #         dtype=np.float32,
+    #     )
+
+    #     last_valid_left = 0.0
+    #     last_valid_right = 1.0
+
+    #     # 从底层往上扫描兜底，确保底部有合理初值
+    #     for r_idx in range(anchors - 1, -1, -1):
+    #         pts = np.nonzero(resized_mask[r_idx, :])[0]
+    #         if len(pts) >= 2:
+    #             last_valid_left = float(pts[0]) / denom_w
+    #             last_valid_right = float(pts[-1]) / denom_w
+    #             break
+    #         elif len(pts) == 1:
+    #             x = float(pts[0]) / denom_w
+    #             last_valid_left = x
+    #             last_valid_right = min(1.0, x + 0.05)
+    #             break
+
+    #     # 3. 逐锚点填充（i=0 最底，i=anchors-1 最顶）；遇到缺省用兜底值延续而不 break 或填 -1
+    #     for i in range(anchors):
+    #         row = anchors - 1 - i
+    #         rails_points = np.nonzero(resized_mask[row, :])[0]
+
+    #         if len(rails_points) >= 2:
+    #             left_x = float(rails_points[0]) / denom_w
+    #             right_x = float(rails_points[-1]) / denom_w
+    #             if right_x <= left_x + 1e-4:
+    #                 right_x = min(1.0, left_x + 1e-2)
+    #             last_valid_left, last_valid_right = left_x, right_x
+    #             traj_target[0, i] = left_x
+    #             traj_target[1, i] = right_x
+    #         elif len(rails_points) == 1:
+    #             x = float(rails_points[0]) / denom_w
+    #             width_est = max(last_valid_right - last_valid_left, 1e-2)
+    #             if abs(x - last_valid_left) <= abs(x - last_valid_right):
+    #                 left_x = x
+    #                 right_x = min(1.0, left_x + width_est)
+    #             else:
+    #                 right_x = x
+    #                 left_x = max(0.0, right_x - width_est)
+    #             traj_target[0, i] = left_x
+    #             traj_target[1, i] = right_x
+    #         else:
+    #             traj_target[0, i] = last_valid_left
+    #             traj_target[1, i] = max(last_valid_right, last_valid_left + 1e-2)
+
+    #     return traj_target, ylim_target
 
     def generate_target_classification(self, rails_mask):
         rails_mask = self.resize_mask(
@@ -533,38 +533,38 @@ class PathsDataset(Dataset):
             target[row, rails_points[0] : rails_points[1] + 1] = 255
         return Image.fromarray(target)
 
-    # def get_perspective_weight_limit(self, percentile, logger):
-    #     logger.info("\nCalculating perspective weight limit...")
-    #     weights = []
-    #     for i in range(len(self)):
-    #         _, traj, ylim = self[i]
-    #         rails = regression_to_rails(traj.numpy(), ylim.item())
-    #         left_rail, right_rail = rails
-    #         rail_width = right_rail[:, 0] - left_rail[:, 0]
-    #         weight = 1 / rail_width
-    #         weights += weight.tolist()
-    #     limit = np.percentile(sorted(weights), percentile)
-    #     logger.info(f"Perspective weight limit: {limit:.2f}")
-    #     return limit
-
-    # FIXME: Jn 修改 适配 ylim [start,stop] 二维输出
     def get_perspective_weight_limit(self, percentile, logger):
         logger.info("\nCalculating perspective weight limit...")
         weights = []
         for i in range(len(self)):
             _, traj, ylim = self[i]
-            traj_np = traj.numpy() if isinstance(traj, torch.Tensor) else np.asarray(traj)
-            ylim_np = ylim.numpy() if isinstance(ylim, torch.Tensor) else np.asarray(ylim)
-            rails = regression_to_rails(traj_np, ylim_np)
-            if rails.shape[1] == 0:
-                continue
+            rails = regression_to_rails(traj.numpy(), ylim.item())
             left_rail, right_rail = rails
-            rail_width = np.maximum(right_rail[:, 0] - left_rail[:, 0], 1e-6)
-            weight = 1.0 / rail_width
+            rail_width = right_rail[:, 0] - left_rail[:, 0]
+            weight = 1 / rail_width
             weights += weight.tolist()
-        if not weights:
-            logger.warning("No valid rail widths found; returning None.")
-            return None
-        limit = float(np.percentile(sorted(weights), percentile))
+        limit = np.percentile(sorted(weights), percentile)
         logger.info(f"Perspective weight limit: {limit:.2f}")
         return limit
+
+    # # FIXME: Jn 修改 适配 ylim [start,stop] 二维输出
+    # def get_perspective_weight_limit(self, percentile, logger):
+    #     logger.info("\nCalculating perspective weight limit...")
+    #     weights = []
+    #     for i in range(len(self)):
+    #         _, traj, ylim = self[i]
+    #         traj_np = traj.numpy() if isinstance(traj, torch.Tensor) else np.asarray(traj)
+    #         ylim_np = ylim.numpy() if isinstance(ylim, torch.Tensor) else np.asarray(ylim)
+    #         rails = regression_to_rails(traj_np, ylim_np)
+    #         if rails.shape[1] == 0:
+    #             continue
+    #         left_rail, right_rail = rails
+    #         rail_width = np.maximum(right_rail[:, 0] - left_rail[:, 0], 1e-6)
+    #         weight = 1.0 / rail_width
+    #         weights += weight.tolist()
+    #     if not weights:
+    #         logger.warning("No valid rail widths found; returning None.")
+    #         return None
+    #     limit = float(np.percentile(sorted(weights), percentile))
+    #     logger.info(f"Perspective weight limit: {limit:.2f}")
+    #     return limit
